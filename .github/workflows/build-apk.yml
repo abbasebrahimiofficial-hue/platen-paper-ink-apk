@@ -1,0 +1,74 @@
+name: Build Platen Paper & Ink APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check project zip
+        id: check
+        run: |
+          if [ -f "Platen-PaperAndInk-Android-Project.zip" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            unzip -o Platen-PaperAndInk-Android-Project.zip -d .
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Project zip not uploaded yet."
+          fi
+
+      - name: Set up JDK 17
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        if: steps.check.outputs.ready == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Generate release keystore
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias platen \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass platen2026 -keypass platen2026 \
+            -dname "CN=Abbas Ebrahimi, OU=Platen Studio, O=AbbasEbrahimi, L=Iran, C=IR"
+
+      - name: Build Signed Release APK
+        if: steps.check.outputs.ready == 'true'
+        run: gradle assembleRelease --no-daemon
+
+      - name: Prepare Release APK
+        if: steps.check.outputs.ready == 'true'
+        run: cp app/build/outputs/apk/release/app-release.apk Platen-PaperAndInk-v1.0.0.apk
+
+      - name: Upload APK Artifact
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Platen-PaperAndInk-v1.0.0.apk
+          path: Platen-PaperAndInk-v1.0.0.apk
+
+      - name: Publish GitHub Release v1.0.0
+        if: steps.check.outputs.ready == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "Platen — Paper & Ink v1.0.0 (Android APK)"
+          body: "نسخه اندروید اپلیکیشن Platen — Paper & Ink ساخته عباس ابراهیمی (@Abbasebrahimiofficial_TLG)"
+          files: Platen-PaperAndInk-v1.0.0.apk
